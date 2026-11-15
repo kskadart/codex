@@ -169,8 +169,10 @@ fn modifier_clicks_and_code_text_do_not_activate_copy_buttons() {
 #[test]
 fn raw_transcript_and_user_prompts_do_not_gain_copy_headers() {
     let mut cells = response("```sh\necho hello\n```");
-    let mut view = TranscriptView::default();
-    view.mode = HistoryRenderMode::Raw;
+    let mut view = TranscriptView {
+        mode: HistoryRenderMode::Raw,
+        ..Default::default()
+    };
     let buffer = render(&mut view, &cells, /*width*/ 30, /*height*/ 8);
     assert!(buttons(&view).is_empty());
     assert!(!text(&buffer).contains("[Copy]"));
