@@ -75,11 +75,11 @@ fn navigate_copy_resize_and_exit() {
     );
     insta::assert_snapshot!(text(&buffer), @"
     › User text > user quote ``` user code ```
-
       Latest plan
 
       > assistant quote
 
+                                                [Copy]
       assistant code
     ");
     insta::assert_snapshot!(
@@ -143,8 +143,8 @@ fn copy_reveals_offscreen_block_with_context() {
     let after = render(&mut view, &cells, /*width*/ 50, /*height*/ 5);
     insta::assert_snapshot!(text(&after), @"
     line
-    line
 
+                                              [Copy]
     last code
     ");
 }

@@ -7,6 +7,8 @@
 
 mod activity;
 mod bookmark;
+#[cfg(test)]
+mod code_copy_tests;
 mod composer_gap;
 mod copy_mode;
 mod disclosure;

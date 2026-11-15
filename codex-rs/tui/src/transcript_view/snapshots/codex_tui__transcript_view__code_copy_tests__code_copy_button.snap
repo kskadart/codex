@@ -1,0 +1,8 @@
+---
+source: tui/src/transcript_view/code_copy_tests.rs
+expression: text(&buffer)
+---
+• Run this command:
+
+                                                                      [Copy]
+  ssh -t -p 12345 user@example.org 'printf "hello world\n"'

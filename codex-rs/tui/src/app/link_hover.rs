@@ -18,6 +18,23 @@ use crate::tui::Tui;
 use crate::tui::TuiEvent;
 
 impl App {
+    fn transcript_copy_button_at(&self, mouse: MouseEvent) -> bool {
+        if !mouse.modifiers.is_empty() {
+            return false;
+        }
+        let view = if let Some(panes) = self.conversation_frame.side_pane()
+            && panes.passive.contains((mouse.column, mouse.row).into())
+        {
+            let Some(companion) = self.side_companions.get(&panes.passive_thread) else {
+                return false;
+            };
+            &companion.view
+        } else {
+            &self.transcript_view
+        };
+        !view.is_select_mode() && view.code_copy_at(mouse.column, mouse.row).is_some()
+    }
+
     pub(super) fn transcript_link_at(&self, mouse: MouseEvent) -> Option<String> {
         if !mouse.modifiers.is_empty()
             && !mouse
@@ -146,10 +163,9 @@ impl App {
         {
             PointerShape::Resize
         } else if self.chat_widget.no_modal_or_popup_active()
-            && tui
-                .link_hover
-                .mouse
-                .is_some_and(|mouse| self.transcript_link_at(mouse).is_some())
+            && tui.link_hover.mouse.is_some_and(|mouse| {
+                self.transcript_link_at(mouse).is_some() || self.transcript_copy_button_at(mouse)
+            })
         {
             PointerShape::Link
         } else {

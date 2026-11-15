@@ -91,6 +91,16 @@ impl JumpTarget {
 }
 
 impl TranscriptView {
+    pub(crate) fn code_copy_at(&self, column: u16, row: u16) -> Option<&str> {
+        if !self.area.contains((column, row).into()) {
+            return None;
+        }
+        let visible = self.visible.get(usize::from(row - self.area.y))?;
+        visible
+            .layout
+            .code_copy_at(visible.row, column - self.area.x)
+    }
+
     /// Automatic copies may deselect but still publish PRIMARY, so retain their source.
     pub(crate) fn selection_copy(&self, action: &ViewAction) -> SelectionCopy {
         match action {
@@ -303,6 +313,17 @@ impl TranscriptView {
         cells: &[Arc<dyn HistoryCell>],
         mode: MouseMode<'_>,
     ) -> Option<ViewAction> {
+        if mode == MouseMode::Interactive
+            && event.kind == MouseEventKind::Down(MouseButton::Left)
+            && event.modifiers.is_empty()
+            && let Some(content) = self.code_copy_at(event.column, event.row)
+        {
+            let content = content.to_owned();
+            self.last_click = None;
+            // With no selection, the existing copy path treats this payload as literal text.
+            self.end_selection(cells);
+            return Some(ViewAction::Copy(content));
+        }
         if mode == MouseMode::Interactive
             && let Some(action) = self.handle_follow_control_mouse(event)
         {

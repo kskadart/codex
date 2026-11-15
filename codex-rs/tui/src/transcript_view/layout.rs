@@ -93,6 +93,13 @@ fn cell_content_layout(
             crate::transcript_image::TranscriptImage::load(path.as_path(), width, protocol)
                 .map(Arc::new);
     }
+    if mode == HistoryRenderMode::Rich
+        && (cell.as_any().is::<crate::history_cell::AgentMarkdownCell>()
+            || cell.as_any().is::<crate::history_cell::ProposedPlanCell>())
+        && let Some(source) = cell.copy_source()
+    {
+        layout = layout.with_code_copy_controls(source);
+    }
     layout
 }
 

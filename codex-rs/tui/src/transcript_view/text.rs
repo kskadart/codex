@@ -16,6 +16,9 @@ mod logical;
 #[path = "text_tabs.rs"]
 mod tabs;
 
+#[path = "text_code_copy.rs"]
+mod code_copy;
+
 use ratatui::buffer::Buffer;
 use ratatui::layout::Alignment;
 use ratatui::layout::Rect;
@@ -53,6 +56,7 @@ pub(crate) struct TextLayout {
     pub(super) disclosure: bool,
     leading_blank_hidden: bool,
     disclosure_control: Option<DisclosureControl>,
+    code_copy_controls: Vec<code_copy::CodeCopyControl>,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -209,6 +213,12 @@ impl TextLayout {
         if let Some(control) = &self.disclosure_control {
             layout = layout.with_control(control.label.clone(), control.anchor);
         }
+        layout = layout.with_code_copy_targets(
+            self.code_copy_controls
+                .iter()
+                .map(|control| (control.offset, Arc::clone(&control.content)))
+                .collect(),
+        );
         layout.image = self.image.clone();
         if self.leading_blank_hidden {
             layout = layout.without_leading_blank_row();
@@ -246,9 +256,9 @@ impl TextLayout {
             return self;
         }
         if let Some(control) = self.disclosure_control.take() {
-            self.rows.remove(control.row);
+            self.remove_presentation_row(control.row);
             if control.anchor == DisclosureAnchor::Turn {
-                self.rows.remove(control.row - 1);
+                self.remove_presentation_row(control.row - 1);
             }
         }
         let source_offset = match anchor {
@@ -305,11 +315,8 @@ impl TextLayout {
             .first()
             .is_some_and(|row| line_width(&row.line.line) == 0)
         {
-            self.rows.remove(/*index*/ 0);
+            self.remove_presentation_row(/*index*/ 0);
             self.leading_blank_hidden = true;
-            if let Some(control) = &mut self.disclosure_control {
-                control.row = control.row.saturating_sub(/*rhs*/ 1);
-            }
         }
         self
     }
@@ -323,9 +330,6 @@ impl TextLayout {
                 /*indent*/ 0,
                 Line::default(),
             );
-            if let Some(control) = &mut self.disclosure_control {
-                control.row += 1;
-            }
         }
         self
     }
@@ -337,6 +341,18 @@ impl TextLayout {
         indent: usize,
         line: Line<'static>,
     ) {
+        if let Some(control) = &mut self.disclosure_control
+            && control.row >= index
+        {
+            control.row += 1;
+        }
+        for control in &mut self.code_copy_controls {
+            if let Some(row) = &mut control.row
+                && *row >= index
+            {
+                *row += 1;
+            }
+        }
         self.rows.insert(
             index,
             TextRow {
@@ -349,6 +365,18 @@ impl TextLayout {
                 tabs: tabs::TabStops::default(),
             },
         );
+    }
+
+    fn remove_presentation_row(&mut self, index: usize) {
+        self.rows.remove(index);
+        if let Some(control) = &mut self.disclosure_control {
+            control.row = control.row.saturating_sub(usize::from(control.row > index));
+        }
+        for control in &mut self.code_copy_controls {
+            if let Some(row) = &mut control.row {
+                *row = row.saturating_sub(usize::from(*row > index));
+            }
+        }
     }
 
     /// Source text between adjacent retained fragments; distinct logical lines have a hard break.
@@ -900,6 +928,7 @@ impl TextLayout {
             disclosure: false,
             leading_blank_hidden: false,
             disclosure_control: None,
+            code_copy_controls: Vec::new(),
         }
     }
 }
