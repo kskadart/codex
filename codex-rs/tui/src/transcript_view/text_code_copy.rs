@@ -69,15 +69,13 @@ impl TextLayout {
         self
     }
 
-    pub(in crate::transcript_view) fn code_copy_at(&self, row: usize, column: u16) -> Option<&str> {
-        let start = usize::from(self.width).checked_sub(LABEL.len())?;
-        let column = usize::from(column);
-        if !(start..usize::from(self.width)).contains(&column) {
-            return None;
-        }
+    pub(in crate::transcript_view) fn code_copy_control(
+        &self,
+        row: usize,
+    ) -> Option<(usize, &str)> {
         self.code_copy_controls
             .iter()
             .find(|control| control.row == Some(row))
-            .map(|control| control.content.as_ref())
+            .map(|control| (control.offset, control.content.as_ref()))
     }
 }

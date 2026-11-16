@@ -7,6 +7,7 @@
 
 mod activity;
 mod bookmark;
+mod code_copy;
 #[cfg(test)]
 mod code_copy_tests;
 mod composer_gap;
@@ -101,6 +102,7 @@ pub(crate) struct TranscriptView {
     position: Position,
     follow_control: follow_control::FollowControl,
     copy_feedback: Option<composer_gap::CopyFeedback>,
+    code_copy_feedback: Option<code_copy::CodeCopyFeedback>,
     composer_tip: Option<(Rect, HyperlinkLine)>,
     turn_tip_key: Option<EntryKey>,
     cache: LayoutCache,
@@ -142,6 +144,7 @@ impl Default for TranscriptView {
             position: Position::Latest,
             follow_control: follow_control::FollowControl::default(),
             copy_feedback: None,
+            code_copy_feedback: None,
             composer_tip: None,
             turn_tip_key: None,
             cache: LayoutCache::default(),
@@ -310,6 +313,7 @@ impl TranscriptView {
             let row_area = Rect::new(area.x, y, area.width, /*height*/ 1);
             layout.render(row_area, buf, row);
             self.render_disclosure(&activity_ids, &layout, row, row_area, buf);
+            self.render_code_copy_feedback(key, &layout, row, row_area, buf);
             if self.highlight == Some(index) && self.selection.is_none() && !self.search.is_active()
             {
                 layout.highlight(0..layout.text().len(), row_area, buf, row);

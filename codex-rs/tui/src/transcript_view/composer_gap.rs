@@ -74,6 +74,29 @@ impl TranscriptView {
         buffer: &mut Buffer,
         now: Instant,
     ) -> Option<Duration> {
+        if self
+            .code_copy_feedback
+            .as_ref()
+            .is_some_and(|feedback| feedback.expires_at.is_some_and(|expiry| expiry <= now))
+        {
+            self.code_copy_feedback = None;
+        }
+        let button_delay = self
+            .code_copy_feedback
+            .as_ref()
+            .and_then(|feedback| feedback.expires_at)
+            .map(|expiry| expiry.saturating_duration_since(now));
+        let gap_delay = self.render_composer_gap_content(area, hint, buffer, now);
+        button_delay.into_iter().chain(gap_delay).min()
+    }
+
+    fn render_composer_gap_content(
+        &mut self,
+        area: Option<Rect>,
+        hint: Option<&HyperlinkLine>,
+        buffer: &mut Buffer,
+        now: Instant,
+    ) -> Option<Duration> {
         self.composer_tip = None;
         if self
             .copy_feedback

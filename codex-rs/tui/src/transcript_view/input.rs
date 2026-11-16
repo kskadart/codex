@@ -23,6 +23,10 @@ pub(crate) enum ViewAction {
     Changed,
     ExitSelectMode,
     Copy(String),
+    CopyCode {
+        text: String,
+        target: super::code_copy::CodeCopyTarget,
+    },
     CopyOnSelect(String),
     PrimarySelection(String),
     CopyAndFollow(String),
@@ -92,13 +96,8 @@ impl JumpTarget {
 
 impl TranscriptView {
     pub(crate) fn code_copy_at(&self, column: u16, row: u16) -> Option<&str> {
-        if !self.area.contains((column, row).into()) {
-            return None;
-        }
-        let visible = self.visible.get(usize::from(row - self.area.y))?;
-        visible
-            .layout
-            .code_copy_at(visible.row, column - self.area.x)
+        self.code_copy_hit_at(column, row)
+            .map(|(_, content)| content)
     }
 
     /// Automatic copies may deselect but still publish PRIMARY, so retain their source.
@@ -115,6 +114,7 @@ impl TranscriptView {
             ViewAction::Changed
             | ViewAction::ExitSelectMode
             | ViewAction::Copy(_)
+            | ViewAction::CopyCode { .. }
             | ViewAction::CopyAndFollow(_)
             | ViewAction::OpenLink(_) => SelectionCopy::EXPLICIT,
         }
@@ -316,13 +316,16 @@ impl TranscriptView {
         if mode == MouseMode::Interactive
             && event.kind == MouseEventKind::Down(MouseButton::Left)
             && event.modifiers.is_empty()
-            && let Some(content) = self.code_copy_at(event.column, event.row)
+            && let Some((target, content)) = self.code_copy_hit_at(event.column, event.row)
         {
             let content = content.to_owned();
             self.last_click = None;
             // With no selection, the existing copy path treats this payload as literal text.
             self.end_selection(cells);
-            return Some(ViewAction::Copy(content));
+            return Some(ViewAction::CopyCode {
+                text: content,
+                target,
+            });
         }
         if mode == MouseMode::Interactive
             && let Some(action) = self.handle_follow_control_mouse(event)

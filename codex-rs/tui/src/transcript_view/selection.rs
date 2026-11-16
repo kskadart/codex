@@ -658,6 +658,7 @@ impl TranscriptView {
 
         let text = match action {
             ViewAction::Copy(text)
+            | ViewAction::CopyCode { text, .. }
             | ViewAction::CopyOnSelect(text)
             | ViewAction::PrimarySelection(text)
             | ViewAction::CopyAndFollow(text) => text.as_str(),
@@ -697,6 +698,9 @@ impl TranscriptView {
         {
             self.follow_pending_copy();
         }
+        if let ViewAction::CopyCode { target, .. } = action {
+            self.record_code_copy_result(*target, &result);
+        }
         Some((text.chars().count(), result))
     }
 
@@ -717,6 +721,7 @@ impl TranscriptView {
         completion: &(u64, crate::clipboard_copy::worker::CopyResult),
         current: bool,
     ) -> Option<bool> {
+        self.finish_code_copy(completion);
         // Feedback also belongs to composer copies and survives selection changes. Complete
         // its matching ticket even when the selection can no longer consume the result.
         if let Some(feedback) = &self.copy_feedback

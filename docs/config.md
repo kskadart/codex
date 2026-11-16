@@ -13,6 +13,10 @@ In the fullscreen transcript, completed assistant responses and plans show a
 original code as plain text, without Markdown fences or surrounding prose.
 Quotes, indentation, and line endings are preserved. The existing clipboard
 feedback reports whether the copy succeeded.
+The clicked control also changes to a highlighted `[Copying…]` while pending,
+green `[Copied]` after confirmed delivery, or red `[Failed]` on error. A
+terminal-only request shows `[Sent]`; verify delivery by pasting.
+Feedback resets to `[Copy]` after two seconds without changing the block's layout.
 
 These controls require terminal mouse support and `[tui].fullscreen_transcript = true`
 (the default). They are hidden in raw transcript mode and when the pane is too
