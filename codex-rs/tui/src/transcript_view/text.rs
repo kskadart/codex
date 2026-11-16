@@ -216,7 +216,7 @@ impl TextLayout {
         layout = layout.with_code_copy_targets(
             self.code_copy_controls
                 .iter()
-                .map(|control| (control.offset, Arc::clone(&control.content)))
+                .map(|control| (control.range.clone(), Arc::clone(&control.content)))
                 .collect(),
         );
         layout.image = self.image.clone();
@@ -710,6 +710,8 @@ impl TextLayout {
             row_area.width = row.content_width;
             HyperlinkParagraph::new(std::slice::from_ref(&row.line), row.line.line.style)
                 .render(row_area, buf);
+            row_area.width = area.width;
+            self.render_code_copy_control(start_row + usize::from(screen_row), row_area, buf, None);
         }
     }
 

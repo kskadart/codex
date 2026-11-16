@@ -75,12 +75,12 @@ fn navigate_copy_resize_and_exit() {
     );
     insta::assert_snapshot!(text(&buffer), @"
     › User text > user quote ``` user code ```
+
       Latest plan
 
       > assistant quote
 
-                                                [Copy]
-      assistant code
+      assistant code    [Copy]
     ");
     insta::assert_snapshot!(
         view.footer_with_navigation(/*width*/ 50, crate::motion::MotionMode::Reduced, "")
@@ -143,9 +143,9 @@ fn copy_reveals_offscreen_block_with_context() {
     let after = render(&mut view, &cells, /*width*/ 50, /*height*/ 5);
     insta::assert_snapshot!(text(&after), @"
     line
+    line
 
-                                              [Copy]
-    last code
+    last code    [Copy]
     ");
 }
 

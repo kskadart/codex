@@ -25,15 +25,10 @@ fn buttons(view: &TranscriptView) -> Vec<(u16, u16, String)> {
         .iter()
         .enumerate()
         .filter_map(|(row, _)| {
-            let column = view.area.width - 1;
-            view.code_copy_at(view.area.x + column, view.area.y + row as u16)
-                .map(|content| {
-                    (
-                        view.area.x + column,
-                        view.area.y + row as u16,
-                        content.into(),
-                    )
-                })
+            (view.area.x..view.area.right()).rev().find_map(|column| {
+                view.code_copy_at(column, view.area.y + row as u16)
+                    .map(|content| (column, view.area.y + row as u16, content.into()))
+            })
         })
         .collect()
 }
@@ -152,7 +147,11 @@ fn copy_button_hit_testing_tracks_scrolling_and_offset_viewports() {
 fn modifier_clicks_and_code_text_do_not_activate_copy_buttons() {
     let cells = response("```sh\necho hello\n```");
     let mut view = TranscriptView::default();
-    render(&mut view, &cells, /*width*/ 30, /*height*/ 8);
+    let buffer = render(&mut view, &cells, /*width*/ 30, /*height*/ 8);
+    let command_row = text(&buffer)
+        .lines()
+        .position(|line| line.contains("echo hello"))
+        .unwrap() as u16;
     let [(column, row, _)] = buttons(&view).try_into().unwrap();
     let mut modified = click(column, row);
     modified.modifiers = KeyModifiers::SHIFT;
@@ -161,7 +160,7 @@ fn modifier_clicks_and_code_text_do_not_activate_copy_buttons() {
         Some(ViewAction::Copy(_) | ViewAction::CopyCode { .. })
     ));
     assert!(!matches!(
-        view.handle_mouse(click(3, row + 1), &cells),
+        view.handle_mouse(click(3, command_row), &cells),
         Some(ViewAction::Copy(_) | ViewAction::CopyCode { .. })
     ));
 }
@@ -256,17 +255,18 @@ fn button_feedback_tracks_the_clicked_block_and_its_clipboard_ticket() {
     let confirmed = render(&mut view, &cells, /*width*/ 40, /*height*/ 12);
     assert_eq!(text(&confirmed).matches("[Copied]").count(), 1);
     assert_eq!(text(&confirmed).matches("[Copy]").count(), 1);
-    let (_, row, _) = buttons(&view).remove(1);
-    assert_eq!(confirmed[(39, row)].fg, Color::Green);
+    let (column, row, _) = buttons(&view).remove(1);
+    assert_eq!(confirmed[(column, row)].fg, Color::Green);
     assert!(!confirmed[(0, row)].modifier.contains(Modifier::REVERSED));
     assert!(
-        confirmed[(39, row)]
+        confirmed[(column, row)]
             .modifier
             .contains(Modifier::BOLD | Modifier::REVERSED)
     );
+    assert_eq!(text(&confirmed).matches("echo same").count(), 2);
     // The longer feedback label remains clickable all the way to its left edge.
     assert!(matches!(
-        view.handle_mouse(click(32, row), &cells),
+        view.handle_mouse(click(column - 7, row), &cells),
         Some(ViewAction::CopyCode { target: clicked, .. }) if clicked == target
     ));
     assert!(!view.layout(&cells, 0).unwrap().text().contains("[Copied]"));
@@ -288,8 +288,8 @@ fn unconfirmed_or_failed_delivery_never_shows_a_successful_button() {
         let buffer = render(&mut view, &cells, /*width*/ 30, /*height*/ 8);
         assert!(text(&buffer).contains(label));
         assert!(!text(&buffer).contains("[Copied]"));
-        let (_, row, _) = buttons(&view).remove(0);
-        assert_eq!(buffer[(29, row)].fg, color);
+        let (column, row, _) = buttons(&view).remove(0);
+        assert_eq!(buffer[(column, row)].fg, color);
     }
 }
 
@@ -354,4 +354,94 @@ fn a_busy_second_button_does_not_steal_pending_feedback() {
             .unwrap()
             .contains("[Copy]")
     );
+}
+
+#[test]
+fn short_commands_show_copy_on_the_same_row_without_a_header() {
+    let cells = response("```sh\necho \"hello\"\n```");
+    let mut view = TranscriptView::default();
+    let buffer = render(&mut view, &cells, /*width*/ 40, /*height*/ 8);
+    let painted = text(&buffer);
+    let lines = painted
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .collect::<Vec<_>>();
+    assert_eq!(lines.len(), 1);
+    assert!(lines[0].contains("echo \"hello\"    [Copy]"));
+    let [(column, row, _)] = buttons(&view).try_into().unwrap();
+    assert!(matches!(
+        view.handle_mouse(click(column, row), &cells),
+        Some(ViewAction::CopyCode { text, .. }) if text == "echo \"hello\"\n"
+    ));
+}
+
+#[test]
+fn long_and_multiline_commands_keep_a_header_and_copy_the_whole_source() {
+    for command in [
+        "printf '%s\\n' 'a very long argument with spaces and quotes that wraps across rows'\n",
+        "echo first\necho second\n",
+    ] {
+        let cells = response(&format!("```sh\n{command}```"));
+        let mut view = TranscriptView::default();
+        let buffer = render(&mut view, &cells, /*width*/ 30, /*height*/ 20);
+        let painted = text(&buffer);
+        let lines = painted.lines().collect::<Vec<_>>();
+        let [(column, row, _)] = buttons(&view).try_into().unwrap();
+        assert_eq!(lines[usize::from(row)].trim(), "[Copy]");
+        assert!(lines[usize::from(row) + 1].contains(command.split_whitespace().next().unwrap()));
+        assert!(matches!(
+            view.handle_mouse(click(column, row), &cells),
+            Some(ViewAction::CopyCode { text, .. }) if text == command
+        ));
+    }
+}
+
+#[test]
+fn inline_placement_reserves_feedback_space_and_switches_on_resize() {
+    let cells = response("```sh\necho 12345678\n```");
+    let mut view = TranscriptView::default();
+    for (width, inline) in [(29, true), (28, false), (29, true)] {
+        let buffer = render(&mut view, &cells, width, /*height*/ 12);
+        let painted = text(&buffer);
+        let button_line = painted
+            .lines()
+            .find(|line| line.contains("[Copy]"))
+            .unwrap();
+        assert_eq!(button_line.contains("echo 12345678"), inline);
+    }
+    let target = target_for_button(&mut view, &cells, /*index*/ 0);
+    view.record_code_copy_result(target, &Ok(CopyStatus::Pending(51)));
+    let pending = render(&mut view, &cells, /*width*/ 29, /*height*/ 12);
+    assert!(text(&pending).contains("echo 12345678    [Copying…]"));
+    view.finish_copy(
+        &cells,
+        &(51, Ok(CopyStatus::Confirmed)),
+        /*current*/ true,
+    );
+    let copied = render(&mut view, &cells, /*width*/ 29, /*height*/ 12);
+    assert!(text(&copied).contains("echo 12345678    [Copied]"));
+}
+
+#[test]
+fn inline_controls_do_not_enter_source_selection_with_tabs_or_wide_text() {
+    let command = "printf\t'Привет 界'\n";
+    let cells = response(&format!("```sh\n{command}```"));
+    let mut view = TranscriptView::default();
+    let buffer = render(&mut view, &cells, /*width*/ 80, /*height*/ 8);
+    let painted = text(&buffer);
+    let line = painted
+        .lines()
+        .find(|line| line.contains("[Copy]"))
+        .unwrap();
+    assert!(line.contains("Привет 界"));
+    let [(column, row, _)] = buttons(&view).try_into().unwrap();
+    assert!(matches!(
+        view.handle_mouse(click(column, row), &cells),
+        Some(ViewAction::CopyCode { text, .. }) if text == command
+    ));
+    view.begin_selection(&cells, /*column*/ 2, row, /*clicks*/ 1);
+    view.extend_selection(/*column*/ 79, row);
+    let selected = view.selected_text(&cells).unwrap();
+    assert!(selected.contains("Привет 界"));
+    assert!(!selected.contains("[Copy]"));
 }

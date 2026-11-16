@@ -4,5 +4,4 @@ expression: text(&buffer)
 ---
 • Run this command:
 
-                                                                      [Copy]
-  ssh -t -p 12345 user@example.org 'printf "hello world\n"'
+  ssh -t -p 12345 user@example.org 'printf "hello world\n"'    [Copy]

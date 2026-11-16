@@ -313,7 +313,6 @@ impl TranscriptView {
             let row_area = Rect::new(area.x, y, area.width, /*height*/ 1);
             layout.render(row_area, buf, row);
             self.render_disclosure(&activity_ids, &layout, row, row_area, buf);
-            self.render_code_copy_feedback(key, &layout, row, row_area, buf);
             if self.highlight == Some(index) && self.selection.is_none() && !self.search.is_active()
             {
                 layout.highlight(0..layout.text().len(), row_area, buf, row);
@@ -345,6 +344,15 @@ impl TranscriptView {
             self.scroll(current_cells, /*rows*/ 0);
         }
         self.render_search(buf);
+        for (index, visible) in self.visible.iter().enumerate() {
+            self.render_code_copy_control(
+                visible.key,
+                &visible.layout,
+                visible.row,
+                Rect::new(area.x, area.y + index as u16, area.width, 1),
+                buf,
+            );
+        }
     }
 
     /// Persist the clamped reading position after the last paint at the final viewport height.

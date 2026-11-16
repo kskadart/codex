@@ -9,7 +9,10 @@ For a full configuration reference, see [this documentation](https://developers.
 ## Copying code blocks
 
 In the fullscreen transcript, completed assistant responses and plans show a
-`[Copy]` control above each nonempty fenced code block. Click it to copy the
+`[Copy]` control beside short, single-line fenced code blocks. Longer commands and
+multiline blocks use a separate control row above the block. Inline controls
+reserve room for the widest feedback label so the command is never covered.
+Placement is recalculated when the pane is resized. Click a control to copy the
 original code as plain text, without Markdown fences or surrounding prose.
 Quotes, indentation, and line endings are preserved. The existing clipboard
 feedback reports whether the copy succeeded.
@@ -17,6 +20,7 @@ The clicked control also changes to a highlighted `[Copying…]` while pending,
 green `[Copied]` after confirmed delivery, or red `[Failed]` on error. A
 terminal-only request shows `[Sent]`; verify delivery by pasting.
 Feedback resets to `[Copy]` after two seconds without changing the block's layout.
+Visual wrapping never adds newlines to the copied source text.
 
 These controls require terminal mouse support and `[tui].fullscreen_transcript = true`
 (the default). They are hidden in raw transcript mode and when the pane is too

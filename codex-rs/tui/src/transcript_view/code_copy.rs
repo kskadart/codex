@@ -63,8 +63,12 @@ impl TranscriptView {
                 /*default*/ 6,
                 |feedback| feedback.label(self.area.width).width(),
             );
-        let start = self.area.right().checked_sub(u16::try_from(width).ok()?)?;
-        (column >= start).then_some((target, content))
+        let columns = visible
+            .layout
+            .code_copy_columns(visible.row, u16::try_from(width).ok()?)?;
+        columns
+            .contains(&(column - self.area.x))
+            .then_some((target, content))
     }
 
     pub(super) fn record_code_copy_result(
@@ -100,7 +104,7 @@ impl TranscriptView {
         }
     }
 
-    pub(super) fn render_code_copy_feedback(
+    pub(super) fn render_code_copy_control(
         &self,
         key: EntryKey,
         layout: &TextLayout,
@@ -108,19 +112,16 @@ impl TranscriptView {
         area: Rect,
         buffer: &mut Buffer,
     ) {
-        let Some(feedback) = &self.code_copy_feedback else {
-            return;
-        };
-        if feedback.target.key != key
-            || !feedback.is_visible(Instant::now())
-            || layout.code_copy_control(row).map(|(offset, _)| offset)
-                != Some(feedback.target.offset)
-        {
-            return;
-        }
-        Clear.render(area, buffer);
-        let label = feedback.label(area.width);
-        let width = label.width() as u16;
-        label.render(Rect::new(area.right() - width, area.y, width, 1), buffer);
+        let label = self
+            .code_copy_feedback
+            .as_ref()
+            .filter(|feedback| {
+                feedback.target.key == key
+                    && feedback.is_visible(Instant::now())
+                    && layout.code_copy_control(row).map(|(offset, _)| offset)
+                        == Some(feedback.target.offset)
+            })
+            .map(|feedback| feedback.label(area.width));
+        layout.render_code_copy_control(row, area, buffer, label);
     }
 }
