@@ -1,5 +1,5 @@
 //! Copy controls are decorations, never part of selectable or searchable code.
-//! Retain the fenced source so wrapping, highlighting, and resize cannot alter the clipboard.
+//! Retain the fenced source, omitting trailing line endings from clipboard payloads.
 
 use super::*;
 
@@ -41,7 +41,8 @@ impl TextLayout {
                 let at = codes
                     .iter()
                     .position(|code| normalized(code) == normalized(displayed))?;
-                Some((range, codes.remove(at)))
+                let content = codes.remove(at);
+                Some((range, Arc::from(content.trim_end_matches(['\r', '\n']))))
             })
             .collect();
         self.with_code_copy_targets(targets)
@@ -49,20 +50,18 @@ impl TextLayout {
 
     pub(super) fn with_code_copy_targets(mut self, targets: Vec<(Range<usize>, Arc<str>)>) -> Self {
         for (range, content) in targets {
-            let inline = (content.lines().count() == 1)
-                .then(|| self.inline_code_copy_position(&range))
-                .flatten();
+            let inline = self.inline_code_copy_position(&range);
             // Keep targets at narrow widths so a subsequent resize can restore their buttons.
             let (row, column) = if let Some((row, column)) = inline {
                 (Some(row), Some(column))
             } else if usize::from(self.width) >= LABEL.len() {
                 let row = self
                     .rows
-                    .partition_point(|row| row.source.start < range.start);
+                    .partition_point(|row| row.source.start < range.end);
                 let indent = usize::from(self.width) - LABEL.len();
                 self.insert_presentation_row(
                     row,
-                    range.start,
+                    range.end,
                     indent,
                     Line::from(format!("{}{LABEL}", " ".repeat(indent))).cyan(),
                 );
@@ -81,13 +80,9 @@ impl TextLayout {
     }
 
     fn inline_code_copy_position(&self, range: &Range<usize>) -> Option<(usize, u16)> {
-        let mut rows = self.rows.iter().enumerate().filter(|(_, row)| {
+        let (index, row) = self.rows.iter().enumerate().rfind(|(_, row)| {
             !row.source.is_empty() && row.source.start < range.end && row.source.end > range.start
-        });
-        let (index, row) = rows.next()?;
-        if rows.next().is_some() {
-            return None;
-        }
+        })?;
         let column = self
             .column_for_offset_on_row(index, row.source.end)
             .checked_add(INLINE_GAP)?;

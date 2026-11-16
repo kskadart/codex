@@ -9,12 +9,14 @@ For a full configuration reference, see [this documentation](https://developers.
 ## Copying code blocks
 
 In the fullscreen transcript, completed assistant responses and plans show a
-`[Copy]` control beside short, single-line fenced code blocks. Longer commands and
-multiline blocks use a separate control row above the block. Inline controls
-reserve room for the widest feedback label so the command is never covered.
+`[Copy]` control beside the last displayed line of each fenced code block. When
+that line has insufficient room, the control appears immediately below the block.
+Inline controls reserve room for the widest feedback label so the command is
+never covered.
 Placement is recalculated when the pane is resized. Click a control to copy the
 original code as plain text, without Markdown fences or surrounding prose.
-Quotes, indentation, and line endings are preserved. The existing clipboard
+Quotes, indentation, and internal line endings are preserved. Trailing line endings
+are removed so pasting does not submit the final command. The existing clipboard
 feedback reports whether the copy succeeded.
 The clicked control also changes to a highlighted `[Copying…]` while pending,
 green `[Copied]` after confirmed delivery, or red `[Failed]` on error. A

@@ -55,13 +55,13 @@ fn copy_button_copies_original_command_as_plain_text() {
     else {
         panic!("clicking the visible Copy button should request a clipboard copy");
     };
-    assert_eq!(payload, command);
+    assert_eq!(payload, command.trim_end_matches(['\r', '\n']));
     view.copy_selected_text_with(
         &cells,
         &payload,
         /*clear_selection*/ true,
         |text, format| {
-            assert_eq!(text, command);
+            assert_eq!(text, command.trim_end_matches(['\r', '\n']));
             assert!(matches!(format, CopyFormat::PlainText));
             Ok(CopyStatus::Confirmed)
         },
@@ -80,11 +80,11 @@ fn separate_buttons_keep_identical_blocks_and_untyped_fences_distinct() {
     render(&mut view, &cells, /*width*/ 40, /*height*/ 20);
     let targets = buttons(&view);
     assert_eq!(targets.len(), 3);
-    for ((column, row, _), expected) in targets.into_iter().zip([
-        "echo 'one'\n",
-        "echo 'one'\n",
-        "if True:\n    print(\"two\")  \n",
-    ]) {
+    for ((column, row, _), expected) in
+        targets
+            .into_iter()
+            .zip(["echo 'one'", "echo 'one'", "if True:\n    print(\"two\")  "])
+    {
         assert!(matches!(
             view.handle_mouse(click(column, row), &cells),
             Some(ViewAction::CopyCode { text: payload, .. }) if payload == expected
@@ -105,13 +105,13 @@ fn wrapped_command_copy_survives_resize_and_preserves_crlf() {
     let payloads = (0..wide.row_count())
         .filter_map(|row| wide.code_copy_control(row).map(|(_, content)| content))
         .collect::<Vec<_>>();
-    assert_eq!(payloads, vec![command]);
+    assert_eq!(payloads, vec![command.trim_end_matches(['\r', '\n'])]);
     assert_eq!(layout.text(), wide.text());
     render(&mut view, &cells, /*width*/ 32, /*height*/ 20);
     let [(column, row, _)] = buttons(&view).try_into().unwrap();
     assert!(matches!(
         view.handle_mouse(click(column, row), &cells),
-        Some(ViewAction::CopyCode { text: payload, .. }) if payload == command
+        Some(ViewAction::CopyCode { text: payload, .. }) if payload == command.trim_end_matches(['\r', '\n'])
     ));
 }
 
@@ -136,7 +136,7 @@ fn copy_button_hit_testing_tracks_scrolling_and_offset_viewports() {
     view.jump_to_beginning(&cells);
     view.render(area, &mut buffer, &cells);
     let [(column, row, expected)] = buttons(&view).try_into().unwrap();
-    assert_eq!(expected, "echo first\n");
+    assert_eq!(expected, "echo first");
     assert!(matches!(
         view.handle_mouse(click(column, row), &cells),
         Some(ViewAction::CopyCode { text: payload, .. }) if payload == expected
@@ -206,7 +206,7 @@ fn clicking_a_button_replaces_copy_mode_payload_with_the_clicked_block() {
         &payload,
         /*clear_selection*/ true,
         |text, format| {
-            assert_eq!(text, "echo 'Привет 👋'\n");
+            assert_eq!(text, "echo 'Привет 👋'");
             assert!(matches!(format, CopyFormat::PlainText));
             Ok(CopyStatus::Confirmed)
         },
@@ -371,12 +371,12 @@ fn short_commands_show_copy_on_the_same_row_without_a_header() {
     let [(column, row, _)] = buttons(&view).try_into().unwrap();
     assert!(matches!(
         view.handle_mouse(click(column, row), &cells),
-        Some(ViewAction::CopyCode { text, .. }) if text == "echo \"hello\"\n"
+        Some(ViewAction::CopyCode { text, .. }) if text == "echo \"hello\""
     ));
 }
 
 #[test]
-fn long_and_multiline_commands_keep_a_header_and_copy_the_whole_source() {
+fn long_and_multiline_commands_copy_the_whole_source_from_the_last_row() {
     for command in [
         "printf '%s\\n' 'a very long argument with spaces and quotes that wraps across rows'\n",
         "echo first\necho second\n",
@@ -387,11 +387,14 @@ fn long_and_multiline_commands_keep_a_header_and_copy_the_whole_source() {
         let painted = text(&buffer);
         let lines = painted.lines().collect::<Vec<_>>();
         let [(column, row, _)] = buttons(&view).try_into().unwrap();
-        assert_eq!(lines[usize::from(row)].trim(), "[Copy]");
-        assert!(lines[usize::from(row) + 1].contains(command.split_whitespace().next().unwrap()));
+        let last_code_row = lines
+            .iter()
+            .rposition(|line| !line.trim().is_empty() && line.trim() != "[Copy]")
+            .unwrap();
+        assert!(usize::from(row) == last_code_row || usize::from(row) == last_code_row + 1);
         assert!(matches!(
             view.handle_mouse(click(column, row), &cells),
-            Some(ViewAction::CopyCode { text, .. }) if text == command
+            Some(ViewAction::CopyCode { text, .. }) if text == command.trim_end_matches(['\r', '\n'])
         ));
     }
 }
@@ -437,11 +440,56 @@ fn inline_controls_do_not_enter_source_selection_with_tabs_or_wide_text() {
     let [(column, row, _)] = buttons(&view).try_into().unwrap();
     assert!(matches!(
         view.handle_mouse(click(column, row), &cells),
-        Some(ViewAction::CopyCode { text, .. }) if text == command
+        Some(ViewAction::CopyCode { text, .. }) if text == command.trim_end_matches(['\r', '\n'])
     ));
     view.begin_selection(&cells, /*column*/ 2, row, /*clicks*/ 1);
     view.extend_selection(/*column*/ 79, row);
     let selected = view.selected_text(&cells).unwrap();
     assert!(selected.contains("Привет 界"));
     assert!(!selected.contains("[Copy]"));
+}
+
+#[test]
+fn wrapped_commands_anchor_to_the_final_displayed_row_or_immediately_below() {
+    for (length, inline) in [(31, true), (26, false)] {
+        let command = "x".repeat(length);
+        let cells = response(&format!("```sh\n{command}\n```"));
+        let mut view = TranscriptView::default();
+        let buffer = render(&mut view, &cells, /*width*/ 30, /*height*/ 12);
+        let painted = text(&buffer);
+        let lines = painted.lines().collect::<Vec<_>>();
+        let last_code_row = lines.iter().rposition(|line| line.contains('x')).unwrap();
+        let [(column, row, _)] = buttons(&view).try_into().unwrap();
+        assert_eq!(usize::from(row), last_code_row + usize::from(!inline));
+        assert!(matches!(
+            view.handle_mouse(click(column, row), &cells),
+            Some(ViewAction::CopyCode { text, .. }) if text == command
+        ));
+    }
+}
+
+#[test]
+fn clipboard_omits_trailing_line_endings_but_preserves_internal_text() {
+    for (source, expected) in [
+        ("echo hello\n\n", "echo hello"),
+        (
+            "echo first\r\n\tprintf '%s\\n' done  \r\n\r\n",
+            "echo first\r\n\tprintf '%s\\n' done  ",
+        ),
+        ("printf '%s\\n' done", "printf '%s\\n' done"),
+    ] {
+        let markdown = if source.ends_with('\n') {
+            format!("```sh\n{source}```")
+        } else {
+            format!("```sh\n{source}")
+        };
+        let cells = response(&markdown);
+        let mut view = TranscriptView::default();
+        render(&mut view, &cells, /*width*/ 70, /*height*/ 14);
+        let [(column, row, _)] = buttons(&view).try_into().unwrap();
+        assert!(matches!(
+            view.handle_mouse(click(column, row), &cells),
+            Some(ViewAction::CopyCode { text, .. }) if text == expected
+        ));
+    }
 }
